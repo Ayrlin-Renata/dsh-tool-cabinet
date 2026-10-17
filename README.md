@@ -15,7 +15,7 @@ This is a *soft* compartmentalization: hidden tools remain callable by exact nam
 
 | Tool | Purpose |
 | --- | --- |
-| `cabinet_list` | Overview: drawers with their tools, desk tools, totals. With a drawer id, lists that drawer's tools with descriptions. |
+| `cabinet_list` | Overview: drawers with their tools, desk tools, totals. With a drawer id, lists that drawer's tools with descriptions. The **first call in a session** also returns a short guide to how the cabinet works (re-show with `help: true`, suppress with `help: false`). |
 | `cabinet_search` | Keyword search across every tool (name, description, drawer label). Each match includes the tool's **full parameter schema**, so it is callable in the same turn. |
 | `cabinet_show` | One tool's complete definition (description, parameters, placement). |
 | `cabinet_config` | Read / preview / set the hot config. `preview` reports the wire-set diff *before* writing; `set` validates, writes atomically (temp + rename), and applies immediately. |
