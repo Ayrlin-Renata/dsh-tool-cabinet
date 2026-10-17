@@ -1,0 +1,7 @@
+# dsh-tool-cabinet profile bundle layer: one insert row mounting the cabinet
+# plugin over the profile root. The user's cordis.patch.yml (applied after
+# every bundle layer) can override this row by id, e.g. to pass a configPath.
+- insert:
+    - id: tool-cabinet
+      name: dsh-tool-cabinet
+      config: {}

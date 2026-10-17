@@ -1,0 +1,47 @@
+{
+	"enabled": true,
+	"applyToScopes": "all",
+	"desk": [
+		"read",
+		"write",
+		"edit",
+		"grep",
+		"glob"
+	],
+	"unfiled": "visible",
+	"drawers": [
+		{
+			"id": "browser",
+			"label": "Browser control",
+			"description": "Drive the shared browser: open, click, type, screenshot, scrape.",
+			"match": { "prefixes": ["browser_"] }
+		},
+		{
+			"id": "web",
+			"label": "Web retrieval",
+			"description": "Search and fetch web content; X/Twitter search.",
+			"match": { "names": ["web_search", "web_fetch", "read_page", "x_search"] }
+		},
+		{
+			"id": "files",
+			"label": "Filesystem & jobs",
+			"description": "Shell execution, background jobs, downloads.",
+			"match": { "prefixes": ["pwsh", "job_"], "names": ["browser_download"] }
+		},
+		{
+			"id": "agents",
+			"label": "Agent orchestration",
+			"description": "Subagents, workflows, goals, session inspection.",
+			"match": { "tags": ["orchestration"] }
+		}
+	],
+	"tags": {
+		"subagent": ["orchestration"],
+		"subagent_fork": ["orchestration"],
+		"workflow": ["orchestration"],
+		"create_goal": ["orchestration"],
+		"update_goal": ["orchestration"],
+		"get_goal": ["orchestration"],
+		"ralph": ["orchestration"]
+	}
+}
