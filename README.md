@@ -73,6 +73,7 @@ The plugin mounts against `tools`, `systemPrompt`, and `agents` services. Its de
 - **PTC deployments**: no-op by design; the cabinet only filters native tool-schema presentation.
 - **Prompt stability**: the headings section and wire list only change when the hot config changes or a tool registers/unregisters — config-authored section text avoids per-turn KV churn.
 - **Unmatched tools** are visible by default (`unfiled: "visible"`); flip to `"drawer"` for strict compartmentalization.
+- **HMR recompose can drop the fiber**: editing a profile patch file under `patchReload: live` recomposes the plugin tree, and a rebuild does not always restore every fiber — the cabinet's tools can then return `Error: unknown tool "cabinet_list"`. This is not a plugin fault (`apply` is re-entry-safe and returns a disposer for its watcher); it is a DSH lifecycle behavior, and it took browser and doctor plugins down in the same observed event. The config file on disk survives intact, so no settings are lost — a restart restores the cabinet. A repair tool would not help here: it would be registered by the very fiber that dies, so it would be unavailable exactly when needed. The `cabinet_list` help text describes this to the agent, so a silent disappearance reads as a known condition rather than an unexplained error.
 
 ## Development
 
