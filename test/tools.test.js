@@ -22,7 +22,7 @@ const FIXTURE_SCHEMAS = [
 	{ name: "cabinet_config", description: "cabinet tool", parameters: {} },
 	{ name: "web_search", description: "search the web", parameters: { query: { type: "string" } } },
 	{ name: "web_fetch", description: "fetch a URL", parameters: {} },
-	{ name: "browser_click", description: "click an element", parameters: {} },
+	{ name: "browser_click", description: "click an element", parameters: { selector: { type: "string" }, index: { type: "integer" } } },
 	{ name: "stray_tool", description: "matches no drawer", parameters: {} }
 ];
 
@@ -243,4 +243,56 @@ test("cabinet_list shows the guide on the first call of a session, then only on 
 	const agent3 = { id: "session-3" };
 	const otherScope = await executeValid(registered, "cabinet_list", {}, { agent: agent3 });
 	assert.ok(typeof otherScope.guide === "string", "each agent scope sees its own first-call guide");
+});
+
+test("cabinet_search renders each match's parameters in the delivered text", async () => {
+	const { ctx, registered } = makeRegistry();
+	registerCabinetTools(ctx, { store });
+
+	// Regression: the output schema carried `parameters` but the render omitted
+	// them, so the model never saw the schemas search claimed to include.
+	const result = await executeValid(registered, "cabinet_search", { query: "web", limit: 5 });
+	const text = registered.get("cabinet_search").output.render({ query: "web" }, result)[0].text;
+	assert.match(text, /Parameters:/, "rendered search output must include the parameters payload");
+});
+
+test("cabinet_search scores a drawer-label hit only for tools inside that drawer", async () => {
+	const { ctx, registered } = makeRegistry();
+	registerCabinetTools(ctx, { store });
+
+	// Regression: scoring checked every drawer's label for every tool, so one
+	// label containing "browser" matched all 8 tools and the alphabetical
+	// tie-break returned an arbitrary slice. Only browser_click lives in the
+	// browser drawer, so only it may match on that label.
+	const result = await executeValid(registered, "cabinet_search", { query: "browser" });
+	assert.ok(result.matches.length > 0, "the browser drawer label still matches its own tool");
+	for (const match of result.matches) {
+		assert.equal(match.placement, "drawer:browser", `"${match.name}" matched the browser label but does not live in that drawer`);
+	}
+	assert.ok(result.matches.some((match) => match.name === "browser_click"), "browser_click must be found via its drawer label");
+});
+
+test("cabinet_list withSchemas returns full parameter schemas, drawer-scoped", async () => {
+	const { ctx, registered } = makeRegistry();
+	registerCabinetTools(ctx, { store });
+
+	// browser_click is the drawer-resident tool (web_search is on the desk, and
+	// desk beats drawer, so the web drawer would only hold empty-schema web_fetch).
+	const withSchemas = await executeValid(registered, "cabinet_list", { drawer: "browser", withSchemas: true });
+	assert.deepEqual(withSchemas.tools.map((tool) => tool.name), ["browser_click"]);
+	assert.deepEqual(withSchemas.tools[0].parameters, { selector: { type: "string" }, index: { type: "integer" } }, "withSchemas must carry the full parameter schema");
+
+	// The rendered text must surface those schemas too, not just descriptions.
+	const text = registered.get("cabinet_list").output.render({ drawer: "browser", withSchemas: true }, withSchemas)[0].text;
+	assert.match(text, /Parameters:/, "rendered drawer dump must include the schemas");
+
+	// Default remains descriptions-only.
+	const plain = await executeValid(registered, "cabinet_list", { drawer: "browser" });
+	assert.equal(plain.tools[0].parameters, undefined, "without withSchemas the drawer listing stays description-only");
+
+	// withSchemas without a drawer id is refused — whole-cabinet dumps are out.
+	await assert.rejects(
+		() => executeValid(registered, "cabinet_list", { withSchemas: true }),
+		/requires a drawer id/
+	);
 });
