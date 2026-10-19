@@ -154,3 +154,33 @@ test("dispose unregisters every alias", () => {
 	aliases.dispose();
 	assert.equal(registered.size, 0);
 });
+test("the alias forwards the original exec, so fs observation keeps its owner", async () => {
+	// Regression guard for the read-before-edit policy: it records observations
+	// on fs/observed keyed by actor.agent.session. An adapter that minted a
+	// fresh exec (no agent) would read fine and silently fail to satisfy it.
+	const seen = [];
+	const target = defineTool({
+		name: "read",
+		description: "Read a UTF-8 text file and return line-numbered content.",
+		parameters: { path: { type: "string", required: true } },
+		output: {
+			schema: { type: "object", additionalProperties: false, properties: { text: { type: "string", required: true } } },
+			render: () => [{ type: "text", text: "ok" }]
+		},
+		execute: (_args, exec) => {
+			seen.push(exec);
+			return Promise.resolve({ text: "ok" });
+		}
+	});
+
+	const { ctx, registered } = makeCtx(new Map([["read", target]]));
+	createAliasRegistry(ctx).sync(config(READ_CLIENT));
+
+	const session = { id: "session-1" };
+	const exec = { agent: { session } };
+	await registered.get("read_client").execute({ file_path: "F:/x.md" }, exec);
+
+	assert.equal(seen.length, 1, "the target ran");
+	assert.equal(seen[0], exec, "the same exec object reached the target");
+	assert.equal(seen[0].agent.session, session, "so the session owner survives for fs/observed");
+});

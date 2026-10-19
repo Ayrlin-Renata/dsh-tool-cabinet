@@ -45,7 +45,7 @@
 		"ralph": ["orchestration"]
 	},
 	"aliases": {
-		"read_client": { "target": "read", "params": { "file_path": "path" }, "description": "Read a file." },
+		"read_client": { "target": "read", "description": "Read a file. Rename only when the target disagrees - check with cabinet_show." },
 		"shell": { "target": "pwsh", "params": { "cmd": "command" }, "description": "Run a shell command." }
 	}
 }

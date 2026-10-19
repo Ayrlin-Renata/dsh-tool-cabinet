@@ -118,7 +118,8 @@ test("cabinet_show output validates for a known tool and rejects unknown", async
 	registerCabinetTools(ctx, { store });
 
 	const result = await executeValid(registered, "cabinet_show", { name: "browser_click" });
-	assert.equal(result.placement, "drawer:browser");
+	assert.equal(result.count, 1);
+	assert.equal(result.tools[0].placement, "drawer:browser");
 
 	await assert.rejects(() => executeValid(registered, "cabinet_show", { name: "missing" }), /no tool named/);
 });
@@ -350,5 +351,37 @@ test("aliases stay out of the inventory and out of search unless asked for", asy
 
 	// An exact-name lookup still reaches the alias (a deliberate by-name call).
 	const direct = await executeValid(registered, "cabinet_show", { name: "read_client" });
-	assert.equal(direct.placement, "aliases");
+	assert.equal(direct.tools[0].placement, "aliases");
+});
+test("cabinet_show accepts several names in one call", async () => {
+	const { ctx, registered } = makeRegistry();
+	registerCabinetTools(ctx, { store });
+
+	const batch = await executeValid(registered, "cabinet_show", { names: ["web_fetch", "browser_click", "nope"] });
+	assert.equal(batch.count, 2);
+	assert.deepEqual(batch.tools.map((tool) => tool.name), ["web_fetch", "browser_click"]);
+	assert.deepEqual(batch.missing, ["nope"]);
+
+	const rendered = registered.get("cabinet_show").output.render({}, batch).map((block) => block.text).join("\n");
+	assert.match(rendered, /2 tool definition\(s\)/);
+	assert.match(rendered, /Not found in this scope: nope/);
+	assert.match(rendered, /Parameters:/);
+
+	// Duplicates collapse to one lookup.
+	const deduped = await executeValid(registered, "cabinet_show", { names: ["web_fetch", "web_fetch"] });
+	assert.equal(deduped.count, 1);
+
+	// A single resolved name keeps the compact one-tool rendering (no batch head).
+	const single = await executeValid(registered, "cabinet_show", { name: "web_fetch" });
+	assert.equal(single.count, 1);
+	const singleText = registered.get("cabinet_show").output.render({}, single).map((block) => block.text).join("\n");
+	assert.doesNotMatch(singleText, /tool definition\(s\)/);
+
+	await assert.rejects(() => executeValid(registered, "cabinet_show", { names: ["nope"] }), /no tool named/);
+	await assert.rejects(() => executeValid(registered, "cabinet_show", { name: "web_fetch", names: ["web_fetch"] }), /not both/);
+	await assert.rejects(() => executeValid(registered, "cabinet_show", {}), /requires "name"/);
+	await assert.rejects(
+		() => executeValid(registered, "cabinet_show", { names: Array.from({ length: 26 }, (_, index) => `t${index}`) }),
+		/at most 25 names/
+	);
 });

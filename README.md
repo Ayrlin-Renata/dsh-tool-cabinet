@@ -17,7 +17,7 @@ This is a *soft* compartmentalization: hidden tools remain callable by exact nam
 | --- | --- |
 | `cabinet_list` | Overview: drawers with their tools, desk tools, totals. With a drawer id, lists that drawer's tools with descriptions — add `withSchemas: true` to get that drawer's **full parameter schemas in one call** (drawer-scoped only: whole-cabinet schema dumps are refused, since they would re-inject everything the cabinet exists to hide). The reserved drawer id `aliases` opens the compatibility-alias cabinet; `includeAliases: true` adds aliases to the overview. The **first call in a session** also returns a short guide to how the cabinet works (re-show with `help: true`, suppress with `help: false`). |
 | `cabinet_search` | Keyword search across every tool (name, description, drawer label — a label matches only the tools **inside** that drawer). Each match includes the tool's **full parameter schema**, and the rendered text carries those schemas, so it is callable in the same turn. |
-| `cabinet_show` | One tool's complete definition (description, parameters, placement). |
+| `cabinet_show` | Complete definitions (description, parameters, placement) for one tool by `name`, or several at once with `names` (max 25). For discovery use `cabinet_search` (every keyword match) or `cabinet_list { drawer, withSchemas: true }` (a whole drawer). |
 | `cabinet_config` | Read / preview / set the hot config. `preview` reports the wire-set diff *before* writing; `set` validates, writes atomically (temp + rename), and applies immediately. |
 
 ## Configuration
@@ -36,7 +36,7 @@ The hot config file (JSON). See `config.example.json` for a full example.
       "match": { "prefixes": ["browser_"] } }
   ],
   "tags": { "subagent": ["orchestration"] },
-  "aliases": { "read_client": { "target": "read", "params": { "file_path": "path" } } }
+  "aliases": { "shell": { "target": "pwsh", "params": { "cmd": "command" } } }
 }
 ```
 
@@ -46,7 +46,7 @@ The hot config file (JSON). See `config.example.json` for a full example.
 - **`unfiled`** (default `"visible"`): `"visible"` keeps tools no drawer matched on the wire (fail-safe — new tools are never silently hidden); `"drawer"` withholds them into an implicit `unfiled` drawer.
 - **`drawers`**: ordered list; each has `id` (slug), `label`, optional `description`, and `match` with any of `names` (exact), `prefixes` (name prefix), `tags` (from the `tags` map). First matching drawer claims a tool; precedence inside a drawer is names → prefixes → tags.
 - **`tags`**: map of tool name → tag array (the registry schema carries no plugin attribution, so plugin-style grouping is done here).
-- **`aliases`** (default `{}`): compatibility adapters keyed by a *foreign* tool name. Each is `{ target, params?, description? }` — `target` is the real tool to delegate to, `params` renames incoming arguments (`{ "file_path": "path" }`). An alias is registered as a real tool (so dispatch resolves it) but is **never** injected on the wire and never listed in the drawer inventory. The drawer id `aliases` is reserved for it.
+- **`aliases`** (default `{}`): compatibility adapters keyed by a *foreign* tool name. Each is `{ target, params?, description? }` — `target` is the real tool to delegate to, `params` renames incoming arguments (usable only when the target disagrees about a name; verify with `cabinet_show` first). An alias is registered as a real tool (so dispatch resolves it) but is **never** injected on the wire and never listed in the drawer inventory. The drawer id `aliases` is reserved for it.
 
 ### Compatibility aliases
 
@@ -55,6 +55,8 @@ Models trained on other harnesses reach for familiar tool names (`read_client`, 
 An alias registers a hidden adapter under the foreign name that renames the arguments and delegates to the real tool, so a call made out of habit succeeds on the first attempt. Because the adapter is a normal registered tool, it is callable by exact name while costing no prompt space, exactly like a drawer tool.
 
 Aliases are deliberately quiet: they do not appear in `cabinet_list` or `cabinet_search` output, on the desk, or in any drawer. `cabinet_list { "drawer": "aliases" }` opens the alias cabinet itself, and `includeAliases: true` (on `cabinet_list` / `cabinet_search`) folds them into the normal view. They follow `enabled`: a disabled cabinet registers none.
+
+`params` renames *into the parameter names the target actually declares*, so adding a mapping without checking is a real hazard: this harness''s `read` already takes `file_path`, and mapping `file_path → path` renamed the required parameter away. The failure is loud rather than silent — the target rejects the call with `invalid arguments: missing required property "file_path"` — but check `cabinet_show { "name": "<target>" }` before adding one.
 
 Delegation calls the target's own `execute`, so the target's argument validation and body run as they would for a direct call. Registry guards are not re-run for the nested call, and an alias whose target is not currently registered (a torn-down plugin fiber) fails loudly instead of silently doing nothing.
 
