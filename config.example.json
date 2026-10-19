@@ -43,5 +43,9 @@
 		"update_goal": ["orchestration"],
 		"get_goal": ["orchestration"],
 		"ralph": ["orchestration"]
+	},
+	"aliases": {
+		"read_client": { "target": "read", "params": { "file_path": "path" }, "description": "Read a file." },
+		"shell": { "target": "pwsh", "params": { "cmd": "command" }, "description": "Run a shell command." }
 	}
 }

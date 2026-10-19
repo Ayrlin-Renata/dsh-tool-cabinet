@@ -61,6 +61,10 @@ ctx.on("system-prompt/assemble", async (assembly, context, next) => {
   a config ever sets `toolOrder`, it must contain `"<unlisted-tools>"` — but we
   never set it.
 - A `complete` section is restored *after* the waterfall — we don't add one.
+- Compatibility aliases are stripped in `partition()`, not in the waterfall
+  body: they are registered tools, so they *appear* in every assembly's schema
+  list and must be dropped before the desk/drawer split. They belong to no
+  bucket, so a config edit that adds or removes an alias never changes the wire.
 
 ## 4. Tool registration + output validation
 
@@ -75,6 +79,20 @@ render }, execute(args, exec) }`. `parameters` DSL compiles via
 - Schema DSL gotcha: `required: true` on a property spec means "required **in
   its parent**" — a `required` inside a shared sub-schema (like `DIFF_SCHEMA`)
   silently makes it mandatory everywhere it's spread.
+- Arguments are validated against the compiled parameter schema *before* the
+  body runs (`defineTool` wraps `execute` with `validateJsonSchemaValue`), and
+  an object schema must declare `additionalProperties` explicitly. A shim that
+  must accept foreign argument names therefore **cannot** go through
+  `defineTool`: it would reject the very calls it exists to rescue. The alias
+  adapters register a raw definition instead (`ctx.tools.register({ name,
+  description, parameters, output: { schema, render }, execute })`), where
+  `parameters` and `output.schema` are plain JSON Schema and no automatic
+  argument validation is applied. Raw registration is validated only for
+  `output` (`render` present, schema in the supported subset).
+- `ctx.tools.register(definition)` returns the exact disposer that unregisters
+  the tool; `ctx.tools.get(name, scope)` resolves a definition (used by the
+  alias adapters to delegate to the target's own `execute` + `output.render`).
+  Both are required for hot re-registration when the alias config changes.
 
 ## 5. Prompt-section APIs and ordering
 

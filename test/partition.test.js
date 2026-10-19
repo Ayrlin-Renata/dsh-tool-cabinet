@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { partition, drawerMatches, visibleNames, CABINET_TOOLS } from "../lib/partition.js";
+import { partition, drawerMatches, visibleNames, aliasNames, CABINET_TOOLS } from "../lib/partition.js";
 
 /** Minimal schema stubs for partition fixtures. */
 const tool = (name) => ({ name, description: `${name} tool`, parameters: {} });
@@ -66,4 +66,27 @@ test("visibleNames reports the wire set", () => {
 
 test("CABINET_TOOLS names are stable", () => {
 	assert.deepEqual(CABINET_TOOLS, ["cabinet_list", "cabinet_search", "cabinet_show", "cabinet_config"]);
+});
+test("alias tools never reach any wire bucket", () => {
+	const schemas = [tool("cabinet_list"), tool("read"), tool("read_client"), tool("stray")];
+	const withAlias = { ...CONFIG, aliases: { read_client: { target: "read", params: {}, description: "" } } };
+
+	const parts = partition(schemas, withAlias);
+	const everyBucket = [...parts.visible, ...parts.hidden, ...parts.unfiled].map((s) => s.name);
+	assert.ok(!everyBucket.includes("read_client"), "an alias is in no bucket at all");
+	assert.deepEqual([...visibleNames(schemas, withAlias)].sort(), ["cabinet_list", "stray"], "read stays drawer-hidden; the alias is absent for its own reason");
+
+	// Prefix and tag matching must not claim it either: hidden adapters are not
+	// part of the cabinet's filing model at all.
+	const claiming = {
+		...withAlias,
+		drawers: [{ id: "r", label: "R", description: "", match: { names: ["read_client"], prefixes: ["read"], tags: [] } }]
+	};
+	const parts2 = partition(schemas, claiming);
+	assert.deepEqual(parts2.drawers[0].tools.map((s) => s.name), ["read"], "only the real tool is claimed");
+});
+
+test("aliasNames lists the configured alias keys", () => {
+	assert.deepEqual([...aliasNames({ aliases: { a: {}, b: {} } })].sort(), ["a", "b"]);
+	assert.equal(aliasNames({}).size, 0);
 });

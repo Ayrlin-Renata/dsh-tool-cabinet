@@ -122,9 +122,44 @@ test("openConfigStore on a missing file starts inert without creating it", () =>
 test("DEFAULT_CONFIG is the inert shape", () => {
 	assert.equal(DEFAULT_CONFIG.enabled, false);
 	assert.deepEqual(DEFAULT_CONFIG.desk, []);
+	assert.deepEqual(DEFAULT_CONFIG.aliases, {});
 });
 
 /** openConfigStore without fs.watch flakiness in tests: pass a stub logger. */
 function openConfigFileForTest(file, warnings) {
 	return openConfigStore(file, { logger: { warn: (message) => warnings.push(message) }, debounceMs: 5 });
 }
+test("normalizeConfig accepts and normalizes aliases", () => {
+	const config = normalizeConfig({
+		enabled: true,
+		aliases: { read_client: { target: "read", params: { file_path: "path" }, description: "foreign read" } }
+	});
+	assert.deepEqual(config.aliases, {
+		read_client: { target: "read", params: { file_path: "path" }, description: "foreign read" }
+	});
+	// description/params are optional and normalize to defined shapes.
+	const bare = normalizeConfig({ aliases: { shell: { target: "pwsh" } } });
+	assert.deepEqual(bare.aliases.shell, { target: "pwsh", params: {}, description: "" });
+});
+
+test("normalizeConfig rejects malformed aliases", () => {
+	assert.throws(() => normalizeConfig({ aliases: { "bad name": { target: "read" } } }), /alias name must be a tool name/);
+	assert.throws(() => normalizeConfig({ aliases: { a: { target: "a" } } }), /must not be the alias itself/);
+	assert.throws(() => normalizeConfig({ aliases: { a: { target: "b", junk: 1 } } }), /unknown key "junk"/);
+	assert.throws(() => normalizeConfig({ aliases: { a: { target: "b", params: { x: "" } } } }), /non-empty parameter name/);
+	assert.throws(() => normalizeConfig({ aliases: [] }), /"aliases" must be an object/);
+});
+
+test("aliases cannot chain to another alias", () => {
+	assert.throws(
+		() => normalizeConfig({ aliases: { a: { target: "b" }, b: { target: "read" } } }),
+		/cannot chain/
+	);
+});
+
+test("the aliases drawer id is reserved", () => {
+	assert.throws(
+		() => normalizeConfig({ drawers: [{ id: "aliases", label: "Aliases" }] }),
+		/reserved for the alias cabinet/
+	);
+});

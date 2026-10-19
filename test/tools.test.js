@@ -39,7 +39,7 @@ const CONFIG = {
 };
 
 /** Registry stub capturing defineTool results by name. */
-function makeRegistry() {
+function makeRegistry(schemas = FIXTURE_SCHEMAS) {
 	const registered = new Map();
 	const ctx = {
 		tools: {
@@ -47,7 +47,7 @@ function makeRegistry() {
 				registered.set(tool.name, tool);
 			},
 			schemas() {
-				return FIXTURE_SCHEMAS;
+				return schemas;
 			}
 		}
 	};
@@ -295,4 +295,60 @@ test("cabinet_list withSchemas returns full parameter schemas, drawer-scoped", a
 		() => executeValid(registered, "cabinet_list", { withSchemas: true }),
 		/requires a drawer id/
 	);
+});
+/** A store whose config carries one compatibility alias. */
+function aliasStore() {
+	return {
+		config: {
+			enabled: true,
+			applyToScopes: "all",
+			desk: ["web_search"],
+			unfiled: "visible",
+			drawers: [...CONFIG.drawers],
+			tags: {},
+			aliases: { read_client: { target: "read", params: { file_path: "path" }, description: "" } }
+		},
+		path: "C:/tmp/tool-cabinet.json",
+		error: null,
+		reload() {}
+	};
+}
+
+const ALIAS_SCHEMAS = [
+	...FIXTURE_SCHEMAS,
+	{
+		name: "read_client",
+		description: 'Compatibility alias for "read".',
+		parameters: { type: "object", additionalProperties: true, properties: {} }
+	}
+];
+
+test("aliases stay out of the inventory and out of search unless asked for", async () => {
+	const { ctx, registered } = makeRegistry(ALIAS_SCHEMAS);
+	registerCabinetTools(ctx, { store: aliasStore() });
+
+	// Default view: the alias is invisible — not counted, not listed, not unfiled.
+	const overview = await executeValid(registered, "cabinet_list", {});
+	assert.equal(overview.totalTools, FIXTURE_SCHEMAS.length, "aliases are not counted as tools");
+	assert.equal(overview.aliases, undefined, "aliases are not listed by default");
+	assert.ok(!overview.unfiled.includes("read_client"), "an alias is never unfiled-visible");
+
+	// includeAliases reveals them.
+	const withAliases = await executeValid(registered, "cabinet_list", { includeAliases: true });
+	assert.deepEqual(withAliases.aliases, [{ name: "read_client", target: "read", description: "" }]);
+	assert.ok(withAliases.totalTools === FIXTURE_SCHEMAS.length, "revealing aliases does not inflate the tool count");
+
+	// The alias cabinet is a reserved drawer id.
+	const drawer = await executeValid(registered, "cabinet_list", { drawer: "aliases" });
+	assert.deepEqual(drawer.tools.map((tool) => tool.name), ["read_client"]);
+
+	// Search hides them by default and finds them on request.
+	const hidden = await executeValid(registered, "cabinet_search", { query: "read" });
+	assert.equal(hidden.count, 0, "search does not surface aliases by default");
+	const shown = await executeValid(registered, "cabinet_search", { query: "read", includeAliases: true });
+	assert.deepEqual(shown.matches.map((match) => match.name), ["read_client"]);
+
+	// An exact-name lookup still reaches the alias (a deliberate by-name call).
+	const direct = await executeValid(registered, "cabinet_show", { name: "read_client" });
+	assert.equal(direct.placement, "aliases");
 });
